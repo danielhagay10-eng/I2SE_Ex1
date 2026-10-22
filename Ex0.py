@@ -1,6 +1,6 @@
 import sys
 import numpy as np
-
+import csv
 class VolumeData:
     def __init__(self, filepath):
         self.filepath = filepath
@@ -70,7 +70,26 @@ class PlaneProjector:
     def get_voxel_value(self, p):
         # כאן נממש בהמשך את הקריאה לקובץ ה-NRRD האמיתי.
         # כרגע נחזיר ערך 255 (לבן) רק כדי שהקוד ירוץ בלי שגיאות.
+      
         return 255
+
+   
+def parse_csv_planes(csv_filepath):
+    planes = []
+    try:
+        with open(csv_filepath, 'r') as f:
+            reader = csv.reader(f)
+            for row in reader:
+                coords = [float(val) for val in row if val.strip()]
+                points = [coords[i:i+3] for i in range(0, len(coords), 3)]
+                if len(points) >= 3:
+                    planes.append(points)
+    except Exception as e:
+        print(f"Error reading CSV: {e}")
+        
+    return planes
+        
+
 def main(nrrd_file, csv_file, mp4_file):
     print(f"Loading NRRD: {nrrd_file}")
     print(f"Reading CSV points: {csv_file}")
