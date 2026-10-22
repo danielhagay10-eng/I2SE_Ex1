@@ -1,11 +1,15 @@
 import sys
 import numpy as np
 import csv
+import nrrd
+
 class VolumeData:
     def __init__(self, filepath):
         self.filepath = filepath
-        # בהמשך נטען כאן את הנתונים
-
+        # טעינת המטריצה התלת-ממדית מהקובץ!
+        self.matrix, self.header = nrrd.read(self.filepath)
+        self.shape = self.matrix.shape
+        print(f"Loaded volume with shape: {self.shape}")
 class PlaneProjector:
     def __init__(self, volume_data):
         self.volume = volume_data
@@ -68,10 +72,15 @@ class PlaneProjector:
         return E
 
     def get_voxel_value(self, p):
-        # כאן נממש בהמשך את הקריאה לקובץ ה-NRRD האמיתי.
-        # כרגע נחזיר ערך 255 (לבן) רק כדי שהקוד ירוץ בלי שגיאות.
-      
-        return 255
+        # הפיכת הקואורדינטות למספרים שלמים כדי לגשת למטריצה
+        x, y, z = int(np.round(p[0])), int(np.round(p[1])), int(np.round(p[2]))
+        
+        # וידוא שאנחנו לא חורגים מגבולות המוח/תמונה
+        max_x, max_y, max_z = self.volume.shape
+        if 0 <= x < max_x and 0 <= y < max_y and 0 <= z < max_z:
+            return self.volume.matrix[x, y, z]
+        else:
+            return 0  # אם חרגנו מהגבולות נחזיר שחור (0)5
 
    
 def parse_csv_planes(csv_filepath):
