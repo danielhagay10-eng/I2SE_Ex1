@@ -2,6 +2,7 @@ import sys
 import numpy as np
 import csv
 import nrrd
+import cv2
 
 class VolumeData:
     def __init__(self, filepath):
