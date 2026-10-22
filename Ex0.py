@@ -122,25 +122,28 @@ def main(nrrd_file, csv_file, mp4_file):
     
     # 3. הכנת משתנים ליצירת הווידאו
     video_writer = None 
-    fps = 30 # קצב פריימים לשנייה (30 תמונות בשנייה)
-
-    # 4. לולאה שעוברת על כל מישור (שורה) שנקרא מקובץ ה-CSV
+    fps = 30 # קצב פריימים לשנייה
+    
+    # 4. לולאה שעוברת על כל מישור
     for i, plane_points in enumerate(planes):
-        # מוודאים שיש לפחות 3 נקודות תקינות (משולש או טרפז)
         if len(plane_points) >= 3:
             print(f"Processing plane {i+1}/{len(planes)} (Points: {len(plane_points)})...")
             
-            # הפעלת האלגוריתם שמחשב ומייצר את התמונה הדו-ממדית
+            # הפעלת האלגוריתם שמחשב ומייצר את התמונה הדו-ממדית (16-ביט)
             image_matrix = projector.project_plane(plane_points)
             
-            # אם זו התמונה הראשונה, פותחים ומגדירים את גודל הווידאו לפיה
+            # נרמול התמונה מ-16-ביט לטווח של 0-255 והמרה ל-uint8 עבור הוידאו
+            normalized_img = cv2.normalize(image_matrix, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX)
+            image_matrix_8u = normalized_img.astype(np.uint8)
+            
+            # אתחול הוידאו לפי מידות הפריים הראשון המנורמל
             if video_writer is None:
-                height, width = image_matrix.shape
-                fourcc = cv2.VideoWriter_fourcc(*'mp4v') # קידוד לפורמט MP4
+                height, width = image_matrix_8u.shape
+                fourcc = cv2.VideoWriter_fourcc(*'mp4v') 
                 video_writer = cv2.VideoWriter(mp4_file, fourcc, fps, (width, height), isColor=False)
             
-            # כתיבת התמונה הנוכחית (הפריים) לתוך קובץ הווידאו
-            video_writer.write(image_matrix)
+            # כתיבת התמונה התקינה (8-ביט) לתוך קובץ הווידאו
+            video_writer.write(image_matrix_8u)
     
     # 5. סגירה ושמירה סופית של קובץ הווידאו לאחר סיום הלולאה
     if video_writer is not None:
