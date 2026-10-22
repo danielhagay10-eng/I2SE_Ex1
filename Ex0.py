@@ -15,13 +15,18 @@ class PlaneProjector:
     def __init__(self, volume_data):
         self.volume = volume_data
 
-    def project_plane(self, p_a, p_b, p_c):
-        # 1. המרת הנקודות למערכים
-        a = np.array(p_a, dtype=float)
-        b = np.array(p_b, dtype=float)
-        c = np.array(p_c, dtype=float)
+    def project_plane(self, points):
+        points = np.array(points, dtype=float)
+        
+        # זיהוי 3 נקודות (משולש) או 4 נקודות (טרפז)
+        if len(points) == 3:
+            a1_start, a2_start, b, c = points[0], points[0], points[1], points[2]
+        elif len(points) == 4:
+            a1_start, a2_start, b, c = points[0], points[1], points[2], points[3]
+        else:
+            return np.zeros((1, 1), dtype=np.uint8)
 
-        Dab = np.linalg.norm(b - a)
+        Dab = np.linalg.norm(b - a1_start)
         Dbc = np.linalg.norm(c - b)
         
         int_Dab = int(np.round(Dab))
@@ -30,30 +35,24 @@ class PlaneProjector:
         if int_Dab == 0 or int_Dbc == 0:
             return np.zeros((1, 1), dtype=np.uint8)
 
-        v_ab = (b - a) / Dab
-        v_ac = (c - a) / Dab
+        v_ab = (b - a1_start) / Dab
+        v_ac = (c - a2_start) / Dab
 
-        # 2. יצירת רשת קואורדינטות (Grid) - מתמטיקה וקטורית במקום לולאות
-        Y = np.arange(int_Dab).reshape(-1, 1)  # ציר הגובה (Dab)
-        X = np.arange(int_Dbc).reshape(1, -1)  # ציר הרוחב (Dbc)
+        Y = np.arange(int_Dab).reshape(-1, 1)
+        X = np.arange(int_Dbc).reshape(1, -1)
 
-        # 3. חישוב a1 ו-a2 לכל שורות המשולש בבת אחת
-        a1 = (a + Y * v_ab)[:, np.newaxis, :]  # עיצוב מחדש למימדים (Dab, 1, 3)
-        a2 = (a + Y * v_ac)[:, np.newaxis, :]
+        a1 = (a1_start + Y * v_ab)[:, np.newaxis, :]
+        a2 = (a2_start + Y * v_ac)[:, np.newaxis, :]
 
-        # 4. חישוב המרחקים והכיוון (dp) לכל השורות
         d12 = np.linalg.norm(a2 - a1, axis=2, keepdims=True)
         
-        # מתעלמים זמנית מאזהרות חלוקה באפס ומציבים 0 במקום
         with np.errstate(divide='ignore', invalid='ignore'):
             dp = np.where(d12 > 0, (a2 - a1) / d12, 0)
 
-        # 5. חישוב x1 וקבלת כל הנקודות התלת-ממדיות (P) במכה אחת
         x1 = X - (int_Dbc / 2) + (d12[..., 0] / 2)
         x1_3d = x1[..., np.newaxis]
         P = a1 + x1_3d * dp
 
-        # 6. בדיקת גבולות - יצירת מסכה (Mask) של מה שבתוך המשולש ובתוך ה-MRI
         valid_triangle = (x1 >= 0) & (x1 <= d12[..., 0])
         
         P_idx = np.round(P).astype(int)
@@ -64,13 +63,9 @@ class PlaneProjector:
         
         valid_mask = valid_triangle & valid_bounds
 
-        # 7. יצירת המטריצה הדו-ממדית (התמונה) ושליפת הנתונים מה-NRRD
         E_T = np.zeros((int_Dab, int_Dbc), dtype=self.volume.matrix.dtype)
-        
-        # הקסם של Numpy: שליפת כל הפיקסלים התקינים בבת אחת
         E_T[valid_mask] = self.volume.matrix[Px[valid_mask], Py[valid_mask], Pz[valid_mask]]
 
-        # מחזירים את המטריצה משוחלפת כדי להתאים לגודל (int_Dbc, int_Dab)
         return E_T.T
    
 def parse_csv_planes(csv_filepath):
@@ -113,13 +108,11 @@ def main(nrrd_file, csv_file, mp4_file):
     fps = 30 # קצב פריימים לשנייה
 
     # 4. לולאה על כל מישור - יצירת היטל והוספה לוידאו
-    for i, plane_points in enumerate(planes):
+for i, plane_points in enumerate(planes):
         if len(plane_points) >= 3:
-            # לוקחים את 3 הנקודות הראשונות כדי להגדיר משולש
-            a, b, c = plane_points[0], plane_points[1], plane_points[2]
-            
-            print(f"Processing plane {i+1}/{len(planes)}...")
-            image_matrix = projector.project_plane(a, b, c)
+            print(f"Processing plane {i+1}/{len(planes)} (Points: {len(plane_points)})...")
+            # שולחים את כל הרשימה (3 או 4 נקודות), הפונקציה כבר תטפל בזה
+            image_matrix = projector.project_plane(plane_points)
             
             # אם זה הפריים הראשון, נאתחל את הוידאו לפי הגודל שלו
             if video_writer is None:
@@ -131,9 +124,10 @@ def main(nrrd_file, csv_file, mp4_file):
             video_writer.write(image_matrix)
     
     # סגירה ושמירה של הוידאו
-    if video_writer is not None:
+if video_writer is not None:
         video_writer.release()
-    print("Processing completed successfully!")
+print("Processing completed successfully!")
+
 if __name__ == "__main__":
     if len(sys.argv) != 4:
         print("Usage: python Ex0.py <file.nrrd> <file.csv> <file.mp4>")
