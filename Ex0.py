@@ -1,16 +1,18 @@
 import sys
 import numpy as np
+import cv2
 import csv
 import nrrd
-import cv2
+import scipy.ndimage
 
 class VolumeData:
     def __init__(self, filepath):
         self.filepath = filepath
-        # טעינת המטריצה התלת-ממדית מהקובץ!
+        # טעינת המטריצה התלת-ממדית (MRI) מקובץ ה-NRRD
         self.matrix, self.header = nrrd.read(self.filepath)
         self.shape = self.matrix.shape
         print(f"Loaded volume with shape: {self.shape}")
+
 class PlaneProjector:
     def __init__(self, volume_data):
         self.volume = volume_data
@@ -18,7 +20,7 @@ class PlaneProjector:
     def project_plane(self, points):
         points = np.array(points, dtype=float)
         
-        # זיהוי 3 נקודות (משולש) או 4 נקודות (טרפז)
+        # זיהוי אם התקבלו 3 נקודות (משולש) או 4 נקודות (טרפז)
         if len(points) == 3:
             a1_start, a2_start, b, c = points[0], points[0], points[1], points[2]
         elif len(points) == 4:
@@ -26,49 +28,64 @@ class PlaneProjector:
         else:
             return np.zeros((1, 1), dtype=np.uint8)
 
+        # חישוב המרחקים על בסיס הנקודות שהתקבלו
         Dab = np.linalg.norm(b - a1_start)
         Dbc = np.linalg.norm(c - b)
         
+        # עיגול המרחקים למספרים שלמים כדי שישמשו כממדי התמונה הדו-ממדית
         int_Dab = int(np.round(Dab))
         int_Dbc = int(np.round(Dbc))
 
+        # מניעת קריסה אם המרחק הוא 0
         if int_Dab == 0 or int_Dbc == 0:
             return np.zeros((1, 1), dtype=np.uint8)
 
+        # יצירת וקטורים מנורמלים שקובעים את כיוון ההתקדמות במרחב
         v_ab = (b - a1_start) / Dab
         v_ac = (c - a2_start) / Dab
 
+        # יצירת רשת הקואורדינטות הדו-ממדית (Grid) כדי לחשב הכל במכה אחת בלי לולאות
         Y = np.arange(int_Dab).reshape(-1, 1)
         X = np.arange(int_Dbc).reshape(1, -1)
 
+        # חישוב וקטורי ההתחלה והסיום (a1, a2) לכל שורה בחיתוך
         a1 = (a1_start + Y * v_ab)[:, np.newaxis, :]
         a2 = (a2_start + Y * v_ac)[:, np.newaxis, :]
 
+        # חישוב המרחק האופקי בכל שורה
         d12 = np.linalg.norm(a2 - a1, axis=2, keepdims=True)
         
+        # חישוב וקטור ההתקדמות האופקי (dp), תוך התעלמות מאזהרות חלוקה באפס
         with np.errstate(divide='ignore', invalid='ignore'):
             dp = np.where(d12 > 0, (a2 - a1) / d12, 0)
 
+        # מציאת הקואורדינטות התלת-ממדיות (P) המדויקות עבור כל פיקסל בתמונה המבוקשת
         x1 = X - (int_Dbc / 2) + (d12[..., 0] / 2)
         x1_3d = x1[..., np.newaxis]
         P = a1 + x1_3d * dp
 
+        # שינוי סדר הצירים כדי להתאים לפונקציית ההחלקה של Scipy
+        coords = P.transpose(2, 0, 1)
+        
+        # דגימה חלקה (אינטרפולציה תלת-ליניארית) של הצבע מתוך ה-MRI. 
+        # פעולה זו מעלימה את "אפקט המדרגות" (Aliasing) ומשפרת את איכות התמונה.
+        sampled_values = scipy.ndimage.map_coordinates(
+            self.volume.matrix, coords, order=1, mode='constant', cval=0.0
+        )
+
+        # יצירת מסכה שמאפסת (צובעת בשחור) אזורים שנמצאים מחוץ לצורת המשולש/טרפז
         valid_triangle = (x1 >= 0) & (x1 <= d12[..., 0])
+        sampled_values[~valid_triangle] = 0
         
-        P_idx = np.round(P).astype(int)
-        Px, Py, Pz = P_idx[..., 0], P_idx[..., 1], P_idx[..., 2]
-        
-        max_x, max_y, max_z = self.volume.shape
-        valid_bounds = (0 <= Px) & (Px < max_x) & (0 <= Py) & (Py < max_y) & (0 <= Pz) & (Pz < max_z)
-        
-        valid_mask = valid_triangle & valid_bounds
-
-        E_T = np.zeros((int_Dab, int_Dbc), dtype=self.volume.matrix.dtype)
-        E_T[valid_mask] = self.volume.matrix[Px[valid_mask], Py[valid_mask], Pz[valid_mask]]
-
+        # המרת הנתונים לפורמט המתאים לתמונה ושחלוף (Transpose) לכיוון הנכון
+        E_T = sampled_values.astype(self.volume.matrix.dtype)
         return E_T.T
    
 def parse_csv_planes(csv_filepath):
+    """
+    קוראת את קובץ ה-CSV ומחלצת ממנו את קואורדינטות המישורים.
+    מחזירה רשימה של מישורים, כאשר כל מישור הוא רשימה של 3 או 4 נקודות.
+    """
     planes = []
     try:
         with open(csv_filepath, 'r') as f:
@@ -116,7 +133,7 @@ def main(nrrd_file, csv_file, mp4_file):
             # הפעלת האלגוריתם שמחשב ומייצר את התמונה הדו-ממדית
             image_matrix = projector.project_plane(plane_points)
             
-            # אם זו התמונה הראשונה, אנחנו פותחים ומגדירים את גודל הווידאו לפיה
+            # אם זו התמונה הראשונה, פותחים ומגדירים את גודל הווידאו לפיה
             if video_writer is None:
                 height, width = image_matrix.shape
                 fourcc = cv2.VideoWriter_fourcc(*'mp4v') # קידוד לפורמט MP4
