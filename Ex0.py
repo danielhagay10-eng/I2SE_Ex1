@@ -93,8 +93,48 @@ def parse_csv_planes(csv_filepath):
 def main(nrrd_file, csv_file, mp4_file):
     print(f"Loading NRRD: {nrrd_file}")
     print(f"Reading CSV points: {csv_file}")
-    print(f"Video output will be saved to: {mp4_file}")
+    
+    # 1. טעינת הנתונים
+    volume = VolumeData(nrrd_file)
+    projector = PlaneProjector(volume)
+    
+    # 2. קריאת נקודות המישורים מה-CSV
+    planes = parse_csv_planes(csv_file)
+    
+    if not planes:
+        print("No planes found in CSV. Exiting.")
+        return
 
+    print(f"Found {len(planes)} planes to process.")
+    print(f"Video output will be saved to: {mp4_file}")
+    
+    # 3. הכנת אובייקט כתיבת הוידאו (OpenCV)
+    # נגדיר וידאו ברוחב וגובה שרירותיים כרגע, הם יתעדכנו לפי הפריים הראשון
+    video_writer = None 
+    fps = 30 # קצב פריימים לשנייה
+
+    # 4. לולאה על כל מישור - יצירת היטל והוספה לוידאו
+    for i, plane_points in enumerate(planes):
+        if len(plane_points) >= 3:
+            # לוקחים את 3 הנקודות הראשונות כדי להגדיר משולש
+            a, b, c = plane_points[0], plane_points[1], plane_points[2]
+            
+            print(f"Processing plane {i+1}/{len(planes)}...")
+            image_matrix = projector.project_plane(a, b, c)
+            
+            # אם זה הפריים הראשון, נאתחל את הוידאו לפי הגודל שלו
+            if video_writer is None:
+                height, width = image_matrix.shape
+                fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+                video_writer = cv2.VideoWriter(mp4_file, fourcc, fps, (width, height), isColor=False)
+            
+            # כתיבת הפריים (המטריצה הדו-ממדית) לתוך הוידאו
+            video_writer.write(image_matrix)
+    
+    # סגירה ושמירה של הוידאו
+    if video_writer is not None:
+        video_writer.release()
+    print("Processing completed successfully!")
 if __name__ == "__main__":
     if len(sys.argv) != 4:
         print("Usage: python Ex0.py <file.nrrd> <file.csv> <file.mp4>")
