@@ -16,73 +16,62 @@ class PlaneProjector:
         self.volume = volume_data
 
     def project_plane(self, p_a, p_b, p_c):
-        # 1.  numpy המרת הנקודות למערכים מתמטיים של 
+        # 1. המרת הנקודות למערכים
         a = np.array(p_a, dtype=float)
         b = np.array(p_b, dtype=float)
         c = np.array(p_c, dtype=float)
 
-        # 2. חישוב הווקטורים והמרחקים
         Dab = np.linalg.norm(b - a)
         Dbc = np.linalg.norm(c - b)
-
-        # הפיכת המרחקים למספרים שלמים (כדי שנוכל להשתמש בהם בלולאות ובגודל המטריצה)
+        
         int_Dab = int(np.round(Dab))
         int_Dbc = int(np.round(Dbc))
 
-        # 3. יצירת וקטורים מנורמלים (וקטור התקדמות של פיקסל 1)
+        if int_Dab == 0 or int_Dbc == 0:
+            return np.zeros((1, 1), dtype=np.uint8)
+
         v_ab = (b - a) / Dab
         v_ac = (c - a) / Dab
 
-        # 4. דו מימדית  ריקה שתהיה התמונה שלנו E יצירת מטריצה  
-        E = np.zeros((int_Dbc, int_Dab), dtype=np.uint8)
+        # 2. יצירת רשת קואורדינטות (Grid) - מתמטיקה וקטורית במקום לולאות
+        Y = np.arange(int_Dab).reshape(-1, 1)  # ציר הגובה (Dab)
+        X = np.arange(int_Dbc).reshape(1, -1)  # ציר הרוחב (Dbc)
 
-        # 5.a לולאות הסריקה - מתחילים מנקודה 
-        a1 = np.copy(a)
-        a2 = np.copy(a)
+        # 3. חישוב a1 ו-a2 לכל שורות המשולש בבת אחת
+        a1 = (a + Y * v_ab)[:, np.newaxis, :]  # עיצוב מחדש למימדים (Dab, 1, 3)
+        a2 = (a + Y * v_ac)[:, np.newaxis, :]
 
-        for y in range(int_Dab):
-            # צועדים צעד אחד על השוקיים של המשולש
-            a1 = a1 + v_ab
-            a2 = a2 + v_ac
-            
-            p = np.copy(a1)
-            d12 = np.linalg.norm(a2 - a1)
-            int_d12 = int(np.round(d12))
-            
-            #  חישוב וקטור ההתקדמות האופקי על השורה 
-            # from a1 to a2
-            if int_d12 > 0:
-                dp = (a2 - a1) / d12
-            else:
-                dp = np.zeros(3)
-
-            for x1 in range(int_d12 + 1):
-                # שליפת הצבע/ערך מהמטריצה התלת-ממדית
-                v_val = self.get_voxel_value(p) 
-                
-                # במטריצה הדו ממדית כדי שהתמונה תהיה ממורכזת  Xחישוב מיקום ה 
-                x = int((int_Dbc / 2) - (int_d12 / 2) + x1)
-                
-                # הצבת הערך בתוך התמונה (מוודאים שאנחנו לא חורגים מהגבולות)
-                if 0 <= x < int_Dbc:
-                    E[x, y] = v_val
-                
-                # מתקדמים לנקודה הבאה על השורה
-                p = p + dp
-
-        return E
-
-    def get_voxel_value(self, p):
-        # הפיכת הקואורדינטות למספרים שלמים כדי לגשת למטריצה
-        x, y, z = int(np.round(p[0])), int(np.round(p[1])), int(np.round(p[2]))
+        # 4. חישוב המרחקים והכיוון (dp) לכל השורות
+        d12 = np.linalg.norm(a2 - a1, axis=2, keepdims=True)
         
-        # וידוא שאנחנו לא חורגים מגבולות המוח/תמונה
-        max_x, max_y, max_z = self.volume.shape
-        if 0 <= x < max_x and 0 <= y < max_y and 0 <= z < max_z:
-            return self.volume.matrix[x, y, z]
-        else:
-            return 0  # אם חרגנו מהגבולות נחזיר שחור (0)5
+        # מתעלמים זמנית מאזהרות חלוקה באפס ומציבים 0 במקום
+        with np.errstate(divide='ignore', invalid='ignore'):
+            dp = np.where(d12 > 0, (a2 - a1) / d12, 0)
 
+        # 5. חישוב x1 וקבלת כל הנקודות התלת-ממדיות (P) במכה אחת
+        x1 = X - (int_Dbc / 2) + (d12[..., 0] / 2)
+        x1_3d = x1[..., np.newaxis]
+        P = a1 + x1_3d * dp
+
+        # 6. בדיקת גבולות - יצירת מסכה (Mask) של מה שבתוך המשולש ובתוך ה-MRI
+        valid_triangle = (x1 >= 0) & (x1 <= d12[..., 0])
+        
+        P_idx = np.round(P).astype(int)
+        Px, Py, Pz = P_idx[..., 0], P_idx[..., 1], P_idx[..., 2]
+        
+        max_x, max_y, max_z = self.volume.shape
+        valid_bounds = (0 <= Px) & (Px < max_x) & (0 <= Py) & (Py < max_y) & (0 <= Pz) & (Pz < max_z)
+        
+        valid_mask = valid_triangle & valid_bounds
+
+        # 7. יצירת המטריצה הדו-ממדית (התמונה) ושליפת הנתונים מה-NRRD
+        E_T = np.zeros((int_Dab, int_Dbc), dtype=self.volume.matrix.dtype)
+        
+        # הקסם של Numpy: שליפת כל הפיקסלים התקינים בבת אחת
+        E_T[valid_mask] = self.volume.matrix[Px[valid_mask], Py[valid_mask], Pz[valid_mask]]
+
+        # מחזירים את המטריצה משוחלפת כדי להתאים לגודל (int_Dbc, int_Dab)
+        return E_T.T
    
 def parse_csv_planes(csv_filepath):
     planes = []
