@@ -83,18 +83,19 @@ def parse_csv_planes(csv_filepath):
         
     return planes
         
-
 def main(nrrd_file, csv_file, mp4_file):
+    # הדפסת שמות הקבצים שהתקבלו מהטרמינל
     print(f"Loading NRRD: {nrrd_file}")
     print(f"Reading CSV points: {csv_file}")
     
-    # 1. טעינת הנתונים
+    # 1. טעינת קובץ התלת-ממד (ה-MRI) ואתחול מחלקת החישוב
     volume = VolumeData(nrrd_file)
     projector = PlaneProjector(volume)
     
-    # 2. קריאת נקודות המישורים מה-CSV
+    # 2. קריאת קואורדינטות המישורים מתוך קובץ ה-CSV
     planes = parse_csv_planes(csv_file)
     
+    # בדיקה האם נמצאו מישורים, אם לא - התוכנית עוצרת בבטחה
     if not planes:
         print("No planes found in CSV. Exiting.")
         return
@@ -102,32 +103,34 @@ def main(nrrd_file, csv_file, mp4_file):
     print(f"Found {len(planes)} planes to process.")
     print(f"Video output will be saved to: {mp4_file}")
     
-    # 3. הכנת אובייקט כתיבת הוידאו (OpenCV)
-    # נגדיר וידאו ברוחב וגובה שרירותיים כרגע, הם יתעדכנו לפי הפריים הראשון
+    # 3. הכנת משתנים ליצירת הווידאו
     video_writer = None 
-    fps = 30 # קצב פריימים לשנייה
+    fps = 30 # קצב פריימים לשנייה (30 תמונות בשנייה)
 
-    # 4. לולאה על כל מישור - יצירת היטל והוספה לוידאו
-for i, plane_points in enumerate(planes):
+    # 4. לולאה שעוברת על כל מישור (שורה) שנקרא מקובץ ה-CSV
+    for i, plane_points in enumerate(planes):
+        # מוודאים שיש לפחות 3 נקודות תקינות (משולש או טרפז)
         if len(plane_points) >= 3:
             print(f"Processing plane {i+1}/{len(planes)} (Points: {len(plane_points)})...")
-            # שולחים את כל הרשימה (3 או 4 נקודות), הפונקציה כבר תטפל בזה
+            
+            # הפעלת האלגוריתם שמחשב ומייצר את התמונה הדו-ממדית
             image_matrix = projector.project_plane(plane_points)
             
-            # אם זה הפריים הראשון, נאתחל את הוידאו לפי הגודל שלו
+            # אם זו התמונה הראשונה, אנחנו פותחים ומגדירים את גודל הווידאו לפיה
             if video_writer is None:
                 height, width = image_matrix.shape
-                fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+                fourcc = cv2.VideoWriter_fourcc(*'mp4v') # קידוד לפורמט MP4
                 video_writer = cv2.VideoWriter(mp4_file, fourcc, fps, (width, height), isColor=False)
             
-            # כתיבת הפריים (המטריצה הדו-ממדית) לתוך הוידאו
+            # כתיבת התמונה הנוכחית (הפריים) לתוך קובץ הווידאו
             video_writer.write(image_matrix)
     
-    # סגירה ושמירה של הוידאו
-if video_writer is not None:
+    # 5. סגירה ושמירה סופית של קובץ הווידאו לאחר סיום הלולאה
+    if video_writer is not None:
         video_writer.release()
-print("Processing completed successfully!")
+    print("Processing completed successfully!")
 
+# נקודת הכניסה של התוכנית - קריאת הארגומנטים מהטרמינל
 if __name__ == "__main__":
     if len(sys.argv) != 4:
         print("Usage: python Ex0.py <file.nrrd> <file.csv> <file.mp4>")

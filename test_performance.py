@@ -10,7 +10,8 @@ def run_experiment():
     start_time = time.time()
     for plane_points in planes:
         if len(plane_points) >= 3:
-            projector.project_plane(plane_points[0], plane_points[1], plane_points[2])
+            # מעבירים את כל הנקודות יחד לפונקציה המעודכנת
+            projector.project_plane(plane_points)
     
     total_time = time.time() - start_time
     fps = len(planes) / total_time
