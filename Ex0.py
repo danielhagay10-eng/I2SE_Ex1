@@ -68,7 +68,6 @@ class PlaneProjector:
         coords = P.transpose(2, 0, 1)
         
         # דגימה חלקה (אינטרפולציה תלת-ליניארית) של הצבע מתוך ה-MRI. 
-        # פעולה זו מעלימה את "אפקט המדרגות" (Aliasing) ומשפרת את איכות התמונה.
         sampled_values = scipy.ndimage.map_coordinates(
             self.volume.matrix, coords, order=1, mode='constant', cval=0.0
         )
@@ -83,36 +82,50 @@ class PlaneProjector:
    
 def parse_csv_planes(csv_filepath):
     """
-    קוראת את קובץ ה-CSV ומחלצת ממנו את קואורדינטות המישורים.
-    מחזירה רשימה של מישורים, כאשר כל מישור הוא רשימה של 3 או 4 נקודות.
+    קוראת את קובץ ה-CSV על פי הפורמט הנדרש (כולל עמודת מספר הנקודות).
     """
     planes = []
     try:
         with open(csv_filepath, 'r') as f:
             reader = csv.reader(f)
+            
+            # דילוג על שורת הכותרת (Header)
+            next(reader, None)
+            
             for row in reader:
-                coords = [float(val) for val in row if val.strip()]
-                points = [coords[i:i+3] for i in range(0, len(coords), 3)]
-                if len(points) >= 3:
-                    planes.append(points)
+                if not row or not row[0].strip():
+                    continue
+                    
+                num_points = int(row[0].strip())
+                points = []
+                
+                # קריאת 3 הנקודות הראשונות
+                points.append([float(row[1]), float(row[2]), float(row[3])])
+                points.append([float(row[4]), float(row[5]), float(row[6])])
+                points.append([float(row[7]), float(row[8]), float(row[9])])
+                
+                # קריאת הנקודה הרביעית במידה והוגדרה
+                if num_points == 4:
+                    points.append([float(row[10]), float(row[11]), float(row[12])])
+                
+                planes.append(points)
+                
     except Exception as e:
         print(f"Error reading CSV: {e}")
         
     return planes
         
 def main(nrrd_file, csv_file, mp4_file):
-    # הדפסת שמות הקבצים שהתקבלו מהטרמינל
     print(f"Loading NRRD: {nrrd_file}")
     print(f"Reading CSV points: {csv_file}")
     
-    # 1. טעינת קובץ התלת-ממד (ה-MRI) ואתחול מחלקת החישוב
+    # 1. טעינת קובץ התלת-ממד ואתחול מחלקת החישוב
     volume = VolumeData(nrrd_file)
     projector = PlaneProjector(volume)
     
-    # 2. קריאת קואורדינטות המישורים מתוך קובץ ה-CSV
+    # 2. קריאת קואורדינטות המישורים מתוך ה-CSV
     planes = parse_csv_planes(csv_file)
     
-    # בדיקה האם נמצאו מישורים, אם לא - התוכנית עוצרת בבטחה
     if not planes:
         print("No planes found in CSV. Exiting.")
         return
@@ -120,37 +133,31 @@ def main(nrrd_file, csv_file, mp4_file):
     print(f"Found {len(planes)} planes to process.")
     print(f"Video output will be saved to: {mp4_file}")
     
-    # 3. הכנת משתנים ליצירת הווידאו
     video_writer = None 
-    fps = 30 # קצב פריימים לשנייה
+    fps = 30 
     
     # 4. לולאה שעוברת על כל מישור
     for i, plane_points in enumerate(planes):
         if len(plane_points) >= 3:
             print(f"Processing plane {i+1}/{len(planes)} (Points: {len(plane_points)})...")
             
-            # הפעלת האלגוריתם שמחשב ומייצר את התמונה הדו-ממדית (16-ביט)
             image_matrix = projector.project_plane(plane_points)
             
-            # נרמול התמונה מ-16-ביט לטווח של 0-255 והמרה ל-uint8 עבור הוידאו
+            # נרמול התמונה מ-16-ביט לטווח של 0-255 והמרה ל-uint8
             normalized_img = cv2.normalize(image_matrix, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX)
             image_matrix_8u = normalized_img.astype(np.uint8)
             
-            # אתחול הוידאו לפי מידות הפריים הראשון המנורמל
             if video_writer is None:
                 height, width = image_matrix_8u.shape
                 fourcc = cv2.VideoWriter_fourcc(*'mp4v') 
                 video_writer = cv2.VideoWriter(mp4_file, fourcc, fps, (width, height), isColor=False)
             
-            # כתיבת התמונה התקינה (8-ביט) לתוך קובץ הווידאו
             video_writer.write(image_matrix_8u)
     
-    # 5. סגירה ושמירה סופית של קובץ הווידאו לאחר סיום הלולאה
     if video_writer is not None:
         video_writer.release()
     print("Processing completed successfully!")
 
-# נקודת הכניסה של התוכנית - קריאת הארגומנטים מהטרמינל
 if __name__ == "__main__":
     if len(sys.argv) != 4:
         print("Usage: python Ex0.py <file.nrrd> <file.csv> <file.mp4>")
