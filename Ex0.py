@@ -1,7 +1,9 @@
 import sys
+import os
+import glob
+import csv
 import numpy as np
 import cv2
-import csv
 import nrrd
 import scipy.ndimage
 
@@ -119,11 +121,11 @@ def main(nrrd_file, csv_file, mp4_file):
     print(f"Loading NRRD: {nrrd_file}")
     print(f"Reading CSV points: {csv_file}")
     
-    # 1. טעינת קובץ התלת-ממד ואתחול מחלקת החישוב
+    # טעינת קובץ התלת-ממד ואתחול מחלקת החישוב
     volume = VolumeData(nrrd_file)
     projector = PlaneProjector(volume)
     
-    # 2. קריאת קואורדינטות המישורים מתוך ה-CSV
+    # קריאת קואורדינטות המישורים מתוך ה-CSV
     planes = parse_csv_planes(csv_file)
     
     if not planes:
@@ -136,7 +138,7 @@ def main(nrrd_file, csv_file, mp4_file):
     video_writer = None 
     fps = 30 
     
-    # 4. לולאה שעוברת על כל מישור
+    # לולאה שעוברת על כל מישור
     for i, plane_points in enumerate(planes):
         if len(plane_points) >= 3:
             print(f"Processing plane {i+1}/{len(planes)} (Points: {len(plane_points)})...")
@@ -159,8 +161,56 @@ def main(nrrd_file, csv_file, mp4_file):
     print("Processing completed successfully!")
 
 if __name__ == "__main__":
-    if len(sys.argv) != 4:
-        print("Usage: python Ex0.py <file.nrrd> <file.csv> <file.mp4>")
-        sys.exit(1)
-    
-    main(sys.argv[1], sys.argv[2], sys.argv[3])
+    if len(sys.argv) == 4:
+        # הרצה אוטומטית דרך הטרמינל (עבור הטסטים והמרצה)
+        main(sys.argv[1], sys.argv[2], sys.argv[3])
+    else:
+        # תפריט אינטראקטיבי לפי מבנה התיקיות החדש
+        nrrd_dir = os.path.join("datasets", "rnnd")
+        csv_dir = os.path.join("datasets", "cvs")
+        
+        if not os.path.exists(nrrd_dir) or not os.path.exists(csv_dir):
+            print(f"Error: Make sure '{nrrd_dir}' and '{csv_dir}' folders exist.")
+            sys.exit(1)
+
+        # שלב 1: בחירת קובץ דימות
+        nrrd_files = glob.glob(os.path.join(nrrd_dir, "*.nrrd"))
+        if not nrrd_files:
+            print(f"No .nrrd files found in {nrrd_dir}.")
+            sys.exit(1)
+            
+        print("\n--- Choose an MRI file ---")
+        for i, f in enumerate(nrrd_files):
+            print(f"{i+1}. {os.path.basename(f)}")
+        try:
+            nrrd_choice = int(input("Enter number: ")) - 1
+            nrrd_file = nrrd_files[nrrd_choice]
+        except (ValueError, IndexError):
+            print("Invalid selection.")
+            sys.exit(1)
+        
+        # שלב 2: בחירת קובץ נקודות
+        csv_files = glob.glob(os.path.join(csv_dir, "*.csv"))
+        if not csv_files:
+            print(f"No .csv files found in {csv_dir}.")
+            sys.exit(1)
+            
+        print("\n--- Choose a CSV file ---")
+        for i, f in enumerate(csv_files):
+            print(f"{i+1}. {os.path.basename(f)}")
+        try:
+            csv_choice = int(input("Enter number: ")) - 1
+            csv_file = csv_files[csv_choice]
+        except (ValueError, IndexError):
+            print("Invalid selection.")
+            sys.exit(1)
+        
+        # שלב 3: הגדרת שם קובץ פלט
+        nrrd_name = os.path.splitext(os.path.basename(nrrd_file))[0]
+        csv_name = os.path.splitext(os.path.basename(csv_file))[0]
+        output_file = f"output_{nrrd_name}_{csv_name}.mp4"
+        
+        print(f"\nRunning with:\nMRI: {nrrd_file}\nCSV: {csv_file}\nOutput: {output_file}\n")
+        
+        # קריאה לפונקציה הראשית
+        main(nrrd_file, csv_file, output_file)

@@ -3,9 +3,9 @@ from Ex0 import VolumeData, PlaneProjector, parse_csv_planes
 
 def run_experiment():
     print("--- Starting Performance Test (Section 8) ---")
-    volume = VolumeData("MRHead.nrrd")
+    volume = VolumeData("datasets/rnnd/MRHead.nrrd")
     projector = PlaneProjector(volume)
-    planes = parse_csv_planes("big_planes.csv")
+    planes = parse_csv_planes("datasets/cvs/big_planes.csv")
     
     start_time = time.time()
     for plane_points in planes:

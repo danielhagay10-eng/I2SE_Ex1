@@ -4,7 +4,7 @@ from Ex0 import VolumeData, PlaneProjector
 
 def test_perfect_oblique_circle():
     print("Loading MRI data...")
-    volume = VolumeData("MRHead.nrrd")
+    volume = VolumeData("datasets/rnnd/MRHead.nrrd")
     shape = volume.matrix.shape
     
     # מציאת המרכז המדויק

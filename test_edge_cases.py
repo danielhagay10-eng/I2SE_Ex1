@@ -6,8 +6,9 @@ from Ex0 import VolumeData, PlaneProjector, parse_csv_planes
 
 class TestEdgeCases(unittest.TestCase):
     def setUp(self):
-        # טעינת הנתונים פעם אחת לפני כל הטסטים
-        self.volume = VolumeData("MRHead.nrrd")
+        # טעינת הנתונים מהנתיב החדש בתוך תיקיית datasets/rnnd
+        nrrd_path = os.path.join("datasets", "rnnd", "MRHead.nrrd")
+        self.volume = VolumeData(nrrd_path)
         self.projector = PlaneProjector(self.volume)
 
     def test_out_of_bounds_projection(self):
