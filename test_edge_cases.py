@@ -52,8 +52,10 @@ class TestEdgeCases(unittest.TestCase):
         
         # חיתוך דרך האלגוריתם הגיאומטרי
         projected_img = self.projector.project_plane([p_a1, p_a2, p_b, p_c])
-        # שליפה ישירה של הפרוסה מהמערך
-        direct_slice = self.volume.matrix[:, :, z_val]
+        
+        # התאמת גודל השליפה הישירה לממדי התמונה המחושבת (255x255) כדי לאפשר השוואה
+        h, w = projected_img.shape
+        direct_slice = self.volume.matrix[:h, :w, z_val]
         
         # חישוב השגיאה המקסימלית
         diff = np.abs(projected_img.astype(float) - direct_slice.astype(float))
@@ -73,9 +75,9 @@ class TestEdgeCases(unittest.TestCase):
         try:
             # איפוס המרחב לשחור וציור צלב צירים תלת-ממדי
             self.volume.matrix.fill(0)
-            self.volume.matrix[:, cy, cz] = 3000  # X axis
-            self.volume.matrix[cx, :, cz] = 3000  # Y axis
-            self.volume.matrix[cx, cy, :] = 3000  # Z axis
+            self.volume.matrix[:, cy, cz] = 3000  # ציר X
+            self.volume.matrix[cx, :, cz] = 3000  # ציר Y
+            self.volume.matrix[cx, cy, :] = 3000  # ציר Z
             
             # חיתוך אלכסוני במרכז
             p_a1 = [0, 0, cz - 40]
