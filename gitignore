@@ -1,0 +1,14 @@
+# Python cache
+__pycache__/
+*.py[cod]
+
+# IDEs and Environments
+.vscode/
+.idea/
+.env
+
+# Generated Output Files (Videos and Images)
+*.mp4
+*.png
+output.mp4
+phantom_axes_oblique.png
