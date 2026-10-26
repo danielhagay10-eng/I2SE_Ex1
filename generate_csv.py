@@ -1,35 +1,58 @@
 import csv
 
-def generate_400_csv(filename="planes_400.csv"):
-    with open(filename, 'w', newline='') as f:
-        writer = csv.writer(f)
-        # שורת הכותרת הנדרשת
-        writer.writerow(["Number of Points", "x1", "y1", "z1", "x2", "y2", "z2", "x3", "y3", "z3", "x4", "y4", "z4"])
+def generate_interactive_csv():
+    try:
+        num_rows = int(input("Enter number of planes to generate: "))
         
-        for i in range(400):
-            # חצי מהשורות עם 4 נקודות וחצי עם 3
-            num_points = 4 if i % 2 == 0 else 3
+        print("\nChoose cut type:")
+        print("1. Axial (Horizontal) - Z axis is constant")
+        print("2. Sagittal (Side view) - X axis is constant")
+        print("3. Coronal (Front view) - Y axis is constant")
+        cut_type = input("Enter 1, 2, or 3: ")
+        
+        start_val = int(input("Enter starting coordinate (e.g., 0 to 129 for Z, or 0 to 255 for X/Y): "))
+        step = int(input("Enter step size between planes (e.g., 1): "))
+        
+        filename = f"custom_planes_{num_rows}.csv"
+        
+        with open(filename, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(["Number of Points", "x1", "y1", "z1", "x2", "y2", "z2", "x3", "y3", "z3", "x4", "y4", "z4"])
             
-            # יצירת גיוון בגבהים ובשיפועים
-            z_start = i % 100
-            z_offset = (i % 20)  
-            
-            row = [num_points]
-            
-            # נקודה 1: פינה שמאלית עליונה
-            row.extend([0, 0, z_start])
-            # נקודה 2: פינה ימנית עליונה
-            row.extend([255, 0, z_start])
-            # נקודה 3: פינה שמאלית תחתונה (עם שיפוע אפשרי)
-            row.extend([0, 255, z_start + z_offset])
-            
-            if num_points == 4:
-                # נקודה 4: פינה ימנית תחתונה
-                row.extend([255, 255, z_start + z_offset])
+            for i in range(num_rows):
+                current_val = start_val + (i * step)
                 
-            writer.writerow(row)
-            
-    print(f"Successfully generated {filename} with 400 planes.")
+                if cut_type == '1': # חיתוך אופקי - Z משתנה בין מישורים
+                    z_val = current_val % 130 
+                    x1, y1, z1 = 0, 0, z_val
+                    x2, y2, z2 = 255, 0, z_val
+                    x3, y3, z3 = 0, 255, z_val
+                    x4, y4, z4 = 255, 255, z_val
+                    
+                elif cut_type == '2': # חיתוך צדדי - X משתנה בין מישורים
+                    x_val = current_val % 256
+                    x1, y1, z1 = x_val, 0, 0
+                    x2, y2, z2 = x_val, 255, 0
+                    x3, y3, z3 = x_val, 0, 129
+                    x4, y4, z4 = x_val, 255, 129
+                    
+                elif cut_type == '3': # חיתוך חזיתי - Y משתנה בין מישורים
+                    y_val = current_val % 256
+                    x1, y1, z1 = 0, y_val, 0
+                    x2, y2, z2 = 255, y_val, 0
+                    x3, y3, z3 = 0, y_val, 129
+                    x4, y4, z4 = 255, y_val, 129
+                    
+                else:
+                    print("Invalid choice, defaulting to Axial.")
+                    break
+                    
+                writer.writerow([4, x1, y1, z1, x2, y2, z2, x3, y3, z3, x4, y4, z4])
+                
+        print(f"\nSuccess! Created {filename} with {num_rows} planes.")
+        
+    except ValueError:
+        print("Error: Please enter numbers only.")
 
 if __name__ == "__main__":
-    generate_400_csv()
+    generate_interactive_csv()
