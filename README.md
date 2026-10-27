@@ -15,7 +15,21 @@ This project implements an algorithm to project a 2D plane out of 3D raster data
 
 ## Usage
 You can run the system via the command line with pre-defined arguments:
+```bash
 python Ex0.py <file.nrrd> <file.csv> <file.mp4>
+```
 
 Alternatively, run it without arguments to launch the interactive menu:
+```bash
 python Ex0.py
+```
+
+The project includes a comprehensive test suite to ensure stability and performance.
+You can run the tests using the interactive test runner:
+```bash
+ python run_tests.py
+```
+Alternatively, you can run all tests directly via the command line using Python's built-in unittest framework: 
+```bash
+python -m unittest discover tests
+```

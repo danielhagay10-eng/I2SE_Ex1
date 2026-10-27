@@ -1,3 +1,4 @@
+```markdown
 # Testing Strategy
 
 To ensure software quality, stability, and robustness, an automated test suite was developed using Python's built-in `unittest` framework.
@@ -13,3 +14,13 @@ The system is tested under extreme scenarios to verify that it handles errors gr
 ## 2. Integration & Performance
 - **Direct Match:** Extracting an algorithmic slice parallel to extracting a slice directly from the raw matrix, verifying that the standard deviation between them is negligible (accounting only for interpolation smoothing).
 - **Performance Test:** A comprehensive benchmark measuring actual execution times, ensuring the system processes planes at a rate significantly higher than the required threshold of 30 FPS.
+
+## 3. How to Execute Tests
+To run the testing suite, you can use the interactive test manager which allows you to run all tests or select specific modules (e.g., only edge cases or only performance):
+```bash
+python run_tests.py
+```
+To run all tests automatically with detailed output (verbose mode) directly from the terminal, use:
+  ```bash 
+python -m unittest discover -v -s tests
+```
