@@ -7,6 +7,32 @@ import cv2
 import nrrd
 import scipy.ndimage
 
+def validate_plane_points(points):
+    """מוודא שהנקודות תקינות וניתן לבנות מהן מישור"""
+    if len(points) < 3:
+        raise ValueError("חסרות נקודות: נדרשות לפחות 3 נקודות להגדרת מישור.")
+
+    # בדיקת נקודות על אותו ישר (Collinear)
+    v1 = points[1] - points[0]
+    v2 = points[2] - points[0]
+    normal = np.cross(v1, v2)
+    
+    if np.linalg.norm(normal) < 1e-6:
+        raise ValueError("נקודות על אותו ישר (Collinear) - לא ניתן להגדיר מישור יחיד.")
+
+    # בדיקת 4 נקודות שאינן על אותו מישור (Non-planar)
+    if len(points) >= 4:
+        v3 = points[3] - points[0]
+        if abs(np.dot(normal, v3)) > 1e-3:
+            raise ValueError("ארבעת הנקודות אינן מונחות על אותו מישור (Non-planar).")
+
+def check_memory_limits(width, height):
+    """מונע קריסת זיכרון במקרה של מידות קיצון"""
+    MAX_PIXELS = 5000 * 5000
+    if width * height > MAX_PIXELS:
+        raise MemoryError(f"חריגת זיכרון: המישור המבוקש עצום ({width}x{height}) ויגרום לקריסה.")
+
+
 class VolumeData:
     def __init__(self, filepath):
         self.filepath = filepath
@@ -21,6 +47,9 @@ class PlaneProjector:
 
     def project_plane(self, points):
         points = np.array(points, dtype=float)
+        
+        # שלב הגנה 1: בדיקת תקינות הקואורדינטות הגיאומטריות
+        validate_plane_points(points)
         
         # זיהוי אם התקבלו 3 נקודות (משולש) או 4 נקודות (טרפז)
         if len(points) == 3:
@@ -37,6 +66,9 @@ class PlaneProjector:
         # עיגול המרחקים למספרים שלמים כדי שישמשו כממדי התמונה הדו-ממדית
         int_Dab = int(np.round(Dab))
         int_Dbc = int(np.round(Dbc))
+
+        # שלב הגנה 2: מניעת קריסת זיכרון (Out of Memory)
+        check_memory_limits(int_Dbc, int_Dab)
 
         # מניעת קריסה אם המרחק הוא 0
         if int_Dab == 0 or int_Dbc == 0:
@@ -81,7 +113,7 @@ class PlaneProjector:
         # המרת הנתונים לפורמט המתאים לתמונה ושחלוף (Transpose) לכיוון הנכון
         E_T = sampled_values.astype(self.volume.matrix.dtype)
         return E_T.T
-   
+
 def parse_csv_planes(csv_filepath):
     """
     קוראת את קובץ ה-CSV על פי הפורמט הנדרש (כולל עמודת מספר הנקודות).
@@ -116,7 +148,7 @@ def parse_csv_planes(csv_filepath):
         print(f"Error reading CSV: {e}")
         
     return planes
-        
+
 def main(nrrd_file, csv_file, mp4_file):
     print(f"Loading NRRD: {nrrd_file}")
     print(f"Reading CSV points: {csv_file}")
@@ -143,18 +175,24 @@ def main(nrrd_file, csv_file, mp4_file):
         if len(plane_points) >= 3:
             print(f"Processing plane {i+1}/{len(planes)} (Points: {len(plane_points)})...")
             
-            image_matrix = projector.project_plane(plane_points)
-            
-            # נרמול התמונה מ-16-ביט לטווח של 0-255 והמרה ל-uint8
-            normalized_img = cv2.normalize(image_matrix, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX)
-            image_matrix_8u = normalized_img.astype(np.uint8)
-            
-            if video_writer is None:
-                height, width = image_matrix_8u.shape
-                fourcc = cv2.VideoWriter_fourcc(*'mp4v') 
-                video_writer = cv2.VideoWriter(mp4_file, fourcc, fps, (width, height), isColor=False)
-            
-            video_writer.write(image_matrix_8u)
+            try:
+                # הוספנו בלוק הגנה: אם המישור שגוי מתמטית, נתפוס את השגיאה ונדלג הלאה
+                image_matrix = projector.project_plane(plane_points)
+                
+                # נרמול התמונה מ-16-ביט לטווח של 0-255 והמרה ל-uint8
+                normalized_img = cv2.normalize(image_matrix, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX)
+                image_matrix_8u = normalized_img.astype(np.uint8)
+                
+                if video_writer is None:
+                    height, width = image_matrix_8u.shape
+                    fourcc = cv2.VideoWriter_fourcc(*'mp4v') 
+                    video_writer = cv2.VideoWriter(mp4_file, fourcc, fps, (width, height), isColor=False)
+                
+                video_writer.write(image_matrix_8u)
+                
+            except (ValueError, MemoryError) as e:
+                print(f"  -> Skipped plane {i+1} due to error: {e}")
+                continue
     
     if video_writer is not None:
         video_writer.release()
@@ -167,50 +205,4 @@ if __name__ == "__main__":
     else:
         # תפריט אינטראקטיבי לפי מבנה התיקיות החדש
         nrrd_dir = os.path.join("datasets", "rnnd")
-        csv_dir = os.path.join("datasets", "cvs")
-        
-        if not os.path.exists(nrrd_dir) or not os.path.exists(csv_dir):
-            print(f"Error: Make sure '{nrrd_dir}' and '{csv_dir}' folders exist.")
-            sys.exit(1)
-
-        # שלב 1: בחירת קובץ דימות
-        nrrd_files = glob.glob(os.path.join(nrrd_dir, "*.nrrd"))
-        if not nrrd_files:
-            print(f"No .nrrd files found in {nrrd_dir}.")
-            sys.exit(1)
-            
-        print("\n--- Choose an MRI file ---")
-        for i, f in enumerate(nrrd_files):
-            print(f"{i+1}. {os.path.basename(f)}")
-        try:
-            nrrd_choice = int(input("Enter number: ")) - 1
-            nrrd_file = nrrd_files[nrrd_choice]
-        except (ValueError, IndexError):
-            print("Invalid selection.")
-            sys.exit(1)
-        
-        # שלב 2: בחירת קובץ נקודות
-        csv_files = glob.glob(os.path.join(csv_dir, "*.csv"))
-        if not csv_files:
-            print(f"No .csv files found in {csv_dir}.")
-            sys.exit(1)
-            
-        print("\n--- Choose a CSV file ---")
-        for i, f in enumerate(csv_files):
-            print(f"{i+1}. {os.path.basename(f)}")
-        try:
-            csv_choice = int(input("Enter number: ")) - 1
-            csv_file = csv_files[csv_choice]
-        except (ValueError, IndexError):
-            print("Invalid selection.")
-            sys.exit(1)
-        
-        # שלב 3: הגדרת שם קובץ פלט
-        nrrd_name = os.path.splitext(os.path.basename(nrrd_file))[0]
-        csv_name = os.path.splitext(os.path.basename(csv_file))[0]
-        output_file = f"output_{nrrd_name}_{csv_name}.mp4"
-        
-        print(f"\nRunning with:\nMRI: {nrrd_file}\nCSV: {csv_file}\nOutput: {output_file}\n")
-        
-        # קריאה לפונקציה הראשית
-        main(nrrd_file, csv_file, output_file)
+        csv

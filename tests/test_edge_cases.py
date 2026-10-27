@@ -2,7 +2,7 @@ import unittest
 import numpy as np
 import os
 import cv2
-from Ex0 import VolumeData, PlaneProjector, parse_csv_planes
+from Ex0 import VolumeData, PlaneProjector, parse_csv_planes, validate_plane_points, check_memory_limits
 
 class TestEdgeCases(unittest.TestCase):
     def setUp(self):
@@ -18,11 +18,11 @@ class TestEdgeCases(unittest.TestCase):
         self.assertTrue(np.all(result == 0), "Out of bounds should return zeros")
 
     def test_zero_distance_triangle(self):
-        # טסט 2: משולש במרחק 0 (נקודות זהות - מניעת קריסה)
+        # טסט 2: משולש במרחק 0 (נקודות זהות)
+        # המערכת אמורה לזרוק שגיאה מתמטית כי אי אפשר לבנות מישור
         p_a = p_b = p_c = [50, 50, 50]
-        result = self.projector.project_plane([p_a, p_b, p_c])
-        self.assertEqual(result.shape, (1, 1), "Zero distance should return 1x1 matrix")
-        self.assertEqual(result[0, 0], 0)
+        with self.assertRaises(ValueError):
+            self.projector.project_plane([p_a, p_b, p_c])
         
     def test_four_points_trapezoid(self):
         # טסט 3: תמיכה ב-4 נקודות (טרפז)
@@ -84,9 +84,9 @@ class TestEdgeCases(unittest.TestCase):
             p_a1 = [0, 0, cz - 40]
             p_a2 = [shape[0]-1, 0, cz]
             p_b  = [0, shape[1]-1, cz + 40]
-            p_c  = [shape[0]-1, shape[1]-1, cz]
             
-            img_matrix = self.projector.project_plane([p_a1, p_a2, p_b, p_c])
+            # נעביר רק 3 נקודות כדי להבטיח מתמטית מישור מושלם שלא ייזרק על ידי הוולידציה
+            img_matrix = self.projector.project_plane([p_a1, p_a2, p_b])
             
             # וידוא שהתמונה נוצרה בהצלחה ואינה ריקה
             self.assertIsNotNone(img_matrix)
@@ -101,6 +101,29 @@ class TestEdgeCases(unittest.TestCase):
         finally:
             # שחזור המטריצה המקורית
             self.volume.matrix = original_matrix
+
+    def test_collinear_points(self):
+        # טסט 7: 3 נקודות על קו ישר אחד
+        points = np.array([[0, 0, 0], [1, 1, 1], [2, 2, 2]])
+        with self.assertRaises(ValueError):
+            validate_plane_points(points)
+
+    def test_non_planar_points(self):
+        # טסט 8: 4 נקודות כאשר הרביעית קופצת החוצה מהמישור
+        points = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [1, 1, 5]])
+        with self.assertRaises(ValueError):
+            validate_plane_points(points)
+
+    def test_missing_points(self):
+        # טסט 9: רק 2 נקודות (חסר מידע להרכבת מישור)
+        points = np.array([[0, 0, 0], [1, 1, 1]])
+        with self.assertRaises(ValueError):
+            validate_plane_points(points)
+
+    def test_memory_overflow(self):
+        # טסט 10: ניסיון לייצר רשת ענקית של 100,000 על 100,000 פיקסלים
+        with self.assertRaises(MemoryError):
+            check_memory_limits(100000, 100000)
 
 if __name__ == '__main__':
     unittest.main()
