@@ -1,37 +1,21 @@
-# 3D Volume Plane Projection (I2SE_Ex1)
+# I2SE_Ex1: Plane Projection of 3D Volume
 
-## Problem Statement
-Given a 3D raster data matrix (M) and a plane (p), the goal is to compute the 2D matrix (image) of the projection of p within M. The system calculates the exact intersection points using vector normalization and mapping algorithms to generate an accurate 2D slice from volumetric data.
+## Project Description
+This project implements an algorithm to project a 2D plane out of 3D raster data (such as an MRI scan in NRRD format). The plane is defined by either 3 or 4 coordinates. The output is a generated MP4 video file displaying the continuous sequence of the projected slices.
 
-## Scope of the Project
-The project requires reading 3D volumetric data files in NRRD format and processing sets of 3D spatial coordinates provided via CSV files. For each plane defined by these coordinates, the software computes the 2D projection and outputs a compiled MP4 video showcasing the sequential plane projections as individual frames. The implementation is written in Python, focusing on Object-Oriented Design (OOD) principles, algorithmic accuracy, and high runtime efficiency (targeting 100+ FPS).
+## Project Structure
+- `Ex0.py`: The core script containing the data processing classes and the main projection algorithm.
+- `tests/`: The test suite directory containing edge cases and performance tests.
+- `docs/`: The documentation directory containing the SRS, Algorithm definition, Datasets info, and Experiment report.
+- `datasets/`: The data directory containing the `.nrrd` volumetric files and the `.csv` coordinate files.
 
-## Usage and Execution
-The project features a dynamic Command-Line Interface (CLI) that automatically scans for datasets and provides an interactive selection menu.
+## System Requirements
+- Python 3.x
+- Third-party libraries: `numpy`, `opencv-python` (cv2), `pynrrd`, `scipy`
 
-**Interactive Mode:**
-Simply run the main script. The system will detect `.nrrd` and `.csv` files in the `datasets` directory and prompt you to choose:
-```bash
+## Usage
+You can run the system via the command line with pre-defined arguments:
+python Ex0.py <file.nrrd> <file.csv> <file.mp4>
+
+Alternatively, run it without arguments to launch the interactive menu:
 python Ex0.py
-```
-
-**Direct CLI Mode:**
-For automated execution (or checking specific files directly), pass the file paths as arguments:
-```bash
-python Ex0.py datasets/rnnd/<filename.nrrd> datasets/cvs/<filename.csv> output.mp4
-```
-
-## Running Tests
-The project includes a robust suite of unit tests and performance benchmarks located in the `tests/` directory.
-
-**Interactive Test Menu:**
-To easily select and run specific tests or all tests at once, use the built-in test runner:
-```bash
-python run_tests.py
-```
-
-**Standard Python Unittest Execution:**
-Alternatively, you can run the test suite directly using Python's native unittest module from the root directory:
-```bash
-python -m unittest discover -s tests
-```

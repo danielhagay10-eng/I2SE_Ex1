@@ -1,45 +1,14 @@
-# Main Algorithm Definition: Plane Projection
+# Algorithm Definition
 
-## 1. Input Parameters
-- **M**: A 3D raster data matrix (volumetric data).
-- **p**: A plane defined by 3 spatial points (a, b, c) forming an isosceles triangle where `dist(a,b) == dist(a,c)`.
+The Plane Projection algorithm calculates an optimal and fast 2D slice from a 3D matrix. It operates through the following mathematical and computational steps:
 
-## 2. Mathematical Setup
-1. Calculate distances: Let $D_{ab} = dist(a,b)$ and $D_{bc} = dist(b,c)$.
-2. Calculate normalized directional vectors:
-   * $v_{ab} = \frac{vector(a,b)}{D_{ab}}$
-   * $v_{ac} = \frac{vector(a,c)}{D_{ab}}$
-3. Initialize an empty 2D output matrix **E** of size $D_{bc} \times D_{ab}$ (width x height).
+1. **Direction Vectors Construction:** Given 3 spatial points (a, b, c), the system calculates the Euclidean distances between them and generates normalized unit vectors 
+representing the direction of progression from point 'a' to 'b', and from 'a' to 'c'.
 
-## 3. Projection Loop (Pseudo-code)
-```text
-For y = 0 to int(Dab) - 1:
-    // Calculate current row endpoints directly based on y
-    a1 = a + y * v_ab
-    a2 = a + y * v_ac
-    
-    // Calculate distance between the endpoints of the current row
-    d12 = dist(a1, a2)
-    
-    // Prevent division by zero at the triangle's apex (when d12 == 0)
-    If d12 == 0:
-        dp = vector(0, 0, 0)
-    Else:
-        dp = vector(a1, a2) / d12
-    
-    p_current = a1
-    
-    For x1 = 0 to int(d12):
-        // Sample the 3D volume (returns 0 if coordinates are out of bounds)
-        v_val = M[p_current]
-        
-        // Calculate and round the centered X coordinate for the 2D matrix
-        x = round( (Dbc / 2) - (d12 / 2) + x1 )
-        
-        // Assign value if within horizontal bounds
-        If 0 <= x < Dbc:
-            E[x][y] = v_val
-            
-        p_current = p_current + dp
+2. **Vectorized Grid Generation:** Instead of using nested `for` loops—which are highly inefficient in Python—the algorithm leverages Numpy's vectorization capabilities to generate the full coordinate matrix (grid) of the target image simultaneously.
 
-Return E
+3. **Exact Coordinate Mapping:** For every pixel in the target 2D image, the algorithm calculates its exact relative 3D coordinate within the original MRI volume.
+
+4. **Trilinear Interpolation:** Since the calculated coordinates are floating-point numbers, the algorithm uses the `map_coordinates` function from `scipy.ndimage`. This performs a smooth trilinear interpolation, calculating the precise grayscale value by weighting the neighboring pixels.
+
+5. **Masking:** Areas in the grid that fall outside the defined triangle or trapezoid boundaries are mathematically cropped and masked with black color (value 0).

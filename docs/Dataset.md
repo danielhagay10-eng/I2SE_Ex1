@@ -1,9 +1,14 @@
-# Dataset Definition
+# Datasets
 
-## Overview
-This project utilizes 3D volumetric data files in the NRRD (Nearly Raw Raster Data) format for image processing and projection, alongside corresponding CSV files that define the spatial coordinates for the planar slices.
+The project utilizes two primary file types to execute the projection:
 
-## Primary Data Sources
-- **Volumetric Data (.nrrd):** The core 3D models used for projection. The primary medical dataset (e.g., `MRHead.nrrd`) is sourced from the open-source **3D Slicer** project. Additional test volumes (such as `onion`, `croissant`, and `swiss_roll`) are provided by the course staff to validate the algorithm across different shapes and densities.
+## 1. Volumetric Scan Data (.nrrd)
+The NRRD (Nearly Raw Raster Data) file contains 3D imaging data (e.g., MRI or CT scans). 
+It consists of a header containing metadata, followed by the data block which is a massive 3D matrix in grayscale. The system reads this matrix and extracts the voxel intensity at any given `[x, y, z]` coordinate.
 
-- **Coordinate Data (.csv):** Each volumetric model is accompanied by a CSV file containing sets of 3D spatial points. These points define the vertices of the specific planes (triangles or trapezoids) to be extracted and projected from the 3D volume.
+## 2. Plane Coordinates File (.csv)
+A comma-separated values text file defining the list of planes (slices) to be extracted.
+**The file structure must strictly follow this format:**
+- The first row is a Header (ignored during runtime).
+- Every subsequent row must begin with an integer representing the number of points for that plane (3 for a triangle, 4 for a trapezoid).
+- This is followed by the `[x, y, z]` coordinates of each point. Therefore, a row will contain 9 consecutive coordinate values for 3 points, or 12 values for 4 points.

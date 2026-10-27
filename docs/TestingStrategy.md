@@ -1,15 +1,15 @@
 # Testing Strategy
 
-## 1. Unit Testing
-- **Vector Math:** Verify distance calculations and vector normalization for accuracy, ensuring floating-point errors are handled (EPS < 0.001).
-- **Boundary Handling:** Ensure the 3D volume sampling returns a default value of 0 (black) when queried coordinates fall outside the valid matrix dimensions.
+To ensure software quality, stability, and robustness, an automated test suite was developed using Python's built-in `unittest` framework.
 
-## 2. Integration Testing
-- Validate the full data pipeline: loading an NRRD file, parsing the CSV points, generating 2D projections, and compiling them into a video sequence.
+## 1. Edge Cases & Mathematical Validation
+The system is tested under extreme scenarios to verify that it handles errors gracefully rather than crashing:
+- **Collinear Points:** Passing 3 points that lie exactly on the same line. Ensures the validation system catches the mathematical impossibility and raises a `ValueError`.
+- **Non-Planar Points:** Passing 4 points where one deviates from the plane of the other three. The validation logic detects this deviation via the dot product and raises an error.
+- **Memory Overflow:** Passing astronomical distances that threaten to exhaust system RAM (e.g., a 100,000x100,000 grid). The system intercepts this and raises a `MemoryError`.
+- **Out of Bounds:** Requesting pixels located far outside the brain scan's actual dimensions. The system prevents a crash and returns a black image matrix (zeros).
+- **Garbage File:** Handling corrupted CSV files that do not contain data in the expected format.
 
-## 3. Demo and System Testing
-- The system will be tested via the main demo script using the command format: `python Ex0.py <file.nrrd> <file.csv> <file.mp4>`.
-- Verify that the output MP4 file correctly compiles the projected frames in the exact sequence specified by the CSV file.
-    
-## 4. Performance Testing
-- Benchmark the execution time to ensure the projection algorithm processes a 500^3 bytes volume at a rate of at least 30 FPS.
+## 2. Integration & Performance
+- **Direct Match:** Extracting an algorithmic slice parallel to extracting a slice directly from the raw matrix, verifying that the standard deviation between them is negligible (accounting only for interpolation smoothing).
+- **Performance Test:** A comprehensive benchmark measuring actual execution times, ensuring the system processes planes at a rate significantly higher than the required threshold of 30 FPS.
